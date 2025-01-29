@@ -3,8 +3,8 @@
 Created on Fri Sep 27 08:35:54 2023#
 
 @author: Adel Tayeb
-This code is a parallelised version of PSO to identify Heat Transfer Coefficient as a function of temperature
-for a tungsten monoblock subjected to heat flux and coolant flow from HIVE operation conditions
+Application of the PSO to identify HTC Boundary Condition for a one thermal-Break 
+Monoblock using MOOSE 
 """
 
 from subprocess import call
