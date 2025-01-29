@@ -1,0 +1,387 @@
+!/////////////////////////////////////////////////////////////////////////
+! FE MODEL - Thermal Analysis of a Quarter of Divertor Monoblock
+! Authors: Lloyd Fletcher, Adel Tayeb
+! Date: 27th September 2022
+! Units: N, m, Pa, kg
+!/////////////////////////////////////////////////////////////////////////
+! Verification model
+ 
+! These two commands clear out ANSYS and set the working directory
+FINISH 
+/CLEAR,NOSTART 
+Jobname = 'HalfMonoB'
+/TITLE,Jobname 
+/FILNAME,Jobname
+! Makes trig functions work in degrees instead of radians 
+*AFUN,DEG    
+PI = 3.141592653589793 
+
+
+
+/PREP7 
+!-------------------------------------------------------------------------
+! PARAMETER DEFINITIONS
+
+! Flags
+solveThermStat = 1
+solveStrucStat = 1
+nonLinGeomOn = 1
+outputTxtFiles = 1
+displayOn = 1
+solveModel = 1
+!~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+! Geometry
+pipeIntDiam = 12e-3
+pipeExtDiam = 15e-3
+
+intLayerThick = 2e-3
+intLayerIntDiam = pipeExtDiam
+intLayerExtDiam = pipeExtDiam+2*intLayerThick
+
+monoBWidth = 23e-3
+monoBThick = 12e-3
+monoBArmHeight = 8e-3
+monoBSpacing = 0.5e-3
+
+pipeIntCirc = PI*pipeIntDiam
+pipeExtCirc = PI*pipeExtDiam
+intLayerExtCirc = PI*intLayerExtDiam
+
+monoBArmSide = (monoBWidth - intLayerExtDiam)/2
+monoBHeight = monoBArmHeight+intLayerExtDiam+monoBArmSide
+monoBSquareL = intLayerExtDiam/2+monoBArmSide
+monoBSquareW = monoBSquareL + 1e-3 ! update the correct geometry
+monoBTopSurfY = monoBArmHeight+intLayerExtDiam/2
+monoBTileHeight = monoBTopSurfY-monoBSquareL  
+
+!~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+! Mesh Sizing
+sweepDivs = 10! just to make the edge of each element 1 mm through the thickness
+monoBArmDivs = 2*8
+monoBRadDivs = 2*5
+pipeCircSectDivs = 2*12
+pipeRadDivs = 2*3
+intLayerRadDivs = 2*5
+
+monoBElemSize = monoBThick/sweepDivs
+tol = monoBElemSize/8
+ctol = pipeIntCirc/(8*4*pipeCircSectDivs)
+
+!~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+! Material Properties
+! Mono-Block / Armour = Tungsten
+! Interlayer = Copper
+! Cooling pipe = CuCrZr
+
+!~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+! Loads and BCs
+numSteps = 10
+
+coolantTemp = 158 !degC
+coolantPress = 6.3e5 ! Pa
+surfHeatFlux = 7e6	! W/m^2 ! 5.65 for the previous data when HHF was constant
+AmbTemp = 158 !degC
+
+stressFreeTemp = 158 !degC
+
+!-------------------------------------------------------------------------
+! GEOMETRY CREATION
+/PNUM,KP,1
+/PNUM,LINE,1
+/PNUM,AREA,1
+/PNUM,VOLU,1
+
+! Mono-block
+BLOCK,monoBSquareL,0,-monoBSquareW,0,0,-monoBThick
+BLOCK,0,monoBSquareL,0,monoBSquareW,0,-monoBThick
+BLOCK,0,monoBSquareL,monoBSquareW,monoBArmHeight+intLayerExtDiam/2,0,-monoBThick
+NUMMRG,ALL
+
+! Pipe and Interlayer
+CYL4,0,0,0,-90,pipeIntDiam/2,90,-monoBThick-monoBSpacing
+CYL4,0,0,0,-90,pipeExtDiam/2,90,-monoBThick-monoBSpacing
+CYL4,0,0,0,-90,intLayerExtDiam/2,90,-monoBThick
+VOVLAP,ALL
+
+! Change to global cylindrical coords
+CSYS,1
+ASEL,S,LOC,X,0,pipeIntDiam/2
+VSLA,S,1
+VDELE,ALL,,,1
+CSYS,0
+ALLSEL
+
+NUMMRG,ALL
+NUMCMP,ALL
+
+/AUTO,1 
+/VIEW,1,1,2,3   
+/ANG,1  
+VPLOT
+
+!-------------------------------------------------------------------------
+! ELEMENT DEFINITION
+! Specimen = Quads 
+ET,1,SOLID90
+
+! Temp element for volume mesh extrusion
+! KeyOpt(1) = 4 (3 node triangle), = 6 (4 node quad) - 2D
+! KeyOpt(1) = 5 (6 node triangle), = 7 (8 node quad) - 2D
+ET,9,MESH200,7
+
+!-------------------------------------------------------------------------
+! MATERIAL PROPERTIES
+
+! NOTE: need to change working directory here to the folder where the material properties are
+
+
+*ULIB,ITER_DEFPROPS,mlib
+*USE,DEF_THERMPROP_OFHCCU,2 
+*USE,DEF_THERMPROP_CUCRZR,1
+*USE,DEF_THERMPROP_TUNGST,3
+*ULIB
+
+! Change back the working directory here
+
+
+! Heat transfer coefficient for convection - Material 4
+MPTEMP
+MPTEMP,1,100,150,200,250,295
+MPDATA,HF,4,,ARG1,ARG2,ARG3,ARG4,ARG5
+MPTEMP
+
+
+
+!-------------------------------------------------------------------------
+! MESHING
+CSYS,1
+
+! LINE SIZING
+ALLSEL
+LSEL,S,LOC,X,pipeIntDiam/2
+LSEL,A,LOC,X,pipeExtDiam/2
+LSEL,A,LOC,X,intLayerExtDiam/2
+LSEL,R,LOC,Z,0
+LESIZE,ALL,,,pipeCircSectDivs
+ALLSEL
+
+ALLSEL
+LSEL,S,LOC,X,pipeIntDiam/2+tol,pipeExtDiam/2-tol
+LSEL,R,LOC,Z,0
+LESIZE,ALL,,,pipeRadDivs
+ALLSEL
+
+ALLSEL
+LSEL,S,LOC,X,pipeExtDiam/2+tol,intLayerExtDiam/2-tol
+LSEL,R,LOC,Z,0
+LESIZE,ALL,,,intLayerRadDivs
+ALLSEL
+
+ALLSEL
+LSEL,S,LOC,X,intLayerExtDiam/2+tol,monoBWidth/2-tol
+LSEL,R,LOC,Z,0
+LESIZE,ALL,,,monoBRadDivs
+ALLSEL
+
+CSYS,0
+ALLSEL
+LSEL,S,LOC,Z,0
+LSEL,R,LOC,Y,monoBWidth/2+tol,intLayerExtDiam/2+monoBArmHeight-tol
+LESIZE,ALL,,,monoBArmDivs
+ALLSEL
+
+LPLOT
+
+! AREA MESHING
+MSHKEY,1
+MSHAPE,0,2D
+TYPE,9
+
+MAT,1
+ALLSEL
+CSYS,1
+ASEL,S,LOC,Z,0
+ASEL,R,LOC,X,pipeIntDiam/2,0.95*pipeExtDiam/2
+AMESH,ALL
+ALLSEL
+
+MAT,2
+ALLSEL
+CSYS,1
+LSEL,S,LOC,Z,0
+LSEL,R,LOC,X,pipeExtDiam/2-tol,intLayerExtDiam/2+tol
+ASLL,S,1
+AMESH,ALL
+ALLSEL
+
+MAT,3
+AMAP,34,25,33,6,4
+AMAP,37,33,26,13,6
+
+
+ALLSEL
+CSYS,0
+ASEL,S,LOC,Z,0
+ASEL,R,LOC,Y,monoBWidth/2+tol,intLayerExtDiam/2+monoBArmHeight-tol
+AMESH,ALL
+ALLSEL
+
+MAT,1
+
+ALLSEL
+LSEL,S,LOC,Z,-monoBThick+tol,0-tol
+LESIZE,ALL,,,sweepDivs
+ALLSEL
+
+CSYS,1
+ALLSEL
+VSEL,S,LOC,X,pipeIntDiam/2,pipeExtDiam/2
+VATT,1,-1,-1,-1,-1
+ALLSEL
+LSEL,S,LOC,X,pipeExtDiam/2-tol,intLayerExtDiam/2+tol
+ASLL,S,1
+VSLA,S,1
+VATT,2,-1,-1,-1,-1
+ALLSEL
+VSEL,U,LOC,X,0,intLayerExtDiam/2
+VATT,3,-1,-1,-1,-1
+ALLSEL
+CSYS,0
+
+! Set extrusion options and allow sweeper to infer areas
+TYPE,1
+EXTOPT,VSWE,auto,0  		! Specify source and target surface for sweep
+EXTOPT,ESIZE,sweepDivs		! Specify number of divisions
+VSWEEP,ALL,,,
+
+ASEL,S,LOC,Z,0	
+ACLEAR,ALL
+
+FINISH
+!-------------------------------------------------------------------------
+! BOUNDARY CONDITIONS
+! SOLUTION AND OUTPUT OPTS
+/SOLU
+CSYS,0
+ANTYPE,STATIC ! Steady-state analysis type
+NROPT,AUTO ! Program-chosen Newton-Raphson option
+AUTOTS,ON ! Automatic time stepping
+NSUBST,numSteps ! Number of substeps
+KBC,0 ! Ramped loading (default)
+OUTRES,ALL,ALL
+
+! Reference Temperature 
+TREF, stressFreeTemp
+TOFFST, 273
+TUNIF, stressFreeTemp
+
+!Load step 1
+
+! Cooling down to room TEMPERATURE
+ALLSEL
+ESEL,S,MAT,,1,3,1
+NSLE,R,ALL
+D,ALL,TEMP,AmbTemp
+ALLSEL
+!TUNIF, AmbTemp
+TIME, 1
+SOLVE
+
+! Load step number 2 
+! heating up to Coolant Temperature
+ALLSEL
+ESEL,S,MAT,,1,3,1
+NSLE,R,ALL
+D,ALL,TEMP,coolantTemp
+ALLSEL
+
+
+CSYS,1	! Switch to cyclindrical coords
+ALLSEL
+NSEL,S,LOC,X,pipeIntDiam/2-tol,pipeIntDiam/2+tol
+ESLN,S
+SF,ALL,CONV,-4,coolantTemp ! heat transfer coeff from mat 4
+ALLSEL
+
+TIME, 2
+SOLVE
+
+DDELE,ALL,TEMP
+
+
+CSKP,11,0,19,18,14,1,1, 
+! HHF distribution From EM Thermal model!
+CSYS,11
+
+*DIM,HHFDist,TABLE,517,442,,X,Y,,11
+*TREAD,HHFDist,HHFDist,csv,,
+
+! Scale the HHF
+*TOPER,HHFDIST,HHFDIST,ADD,HHFDIST,ARG6,0,0,
+
+
+ALLSEL
+NSEL,S,LOC,Z,-tol,tol
+SF,ALL,HFLUX,%HHFDist%
+ALLSEL
+
+! Face surface Heat Flux
+CSKP,12,0,18,16,5,1,1,
+CSYS,12
+
+*DIM,HHFFace,TABLE,268,443,,Y,X,,12
+*TREAD,HHFFace,HHFFace,csv,,
+
+! Scale the HHF
+*TOPER,HHFFace,HHFFace,ADD,HHFFace,ARG7,0,0,
+
+
+ALLSEL
+NSEL,S,LOC,Z,-tol,tol
+SF,ALL,HFLUX,%HHFFace%
+ALLSEL
+
+
+TIME, 3
+SOLVE
+FINISH
+
+!Thermocouple position in the FE model
+
+/POST1
+! Thermocouple near top surface: TC02 in the data-summary-HIVE-00002
+CSYS,0
+NSEL,S,LOC,X,monoBSquareL
+NSEL,R,LOC,Y,monoBTopSurfY-5.26e-3,monoBTopSurfY-4.06e-3 
+NSEL,R,LOC,Z,-3.7e-3,-4.9e-3   
+!PRNSOL,TEMP
+ 
+/OUTPUT,TC02,txt,,
+PRNSOL,TEMP 
+/OUTPUT
+! Thermocouple near middle surface:TC03 in the data-summary-HIVE-00002
+
+NSEL,S,LOC,X,monoBSquareL
+NSEL,R,LOC,Y,monoBTopSurfY-13.69e-3,monoBTopSurfY-12.59e-3  
+NSEL,R,LOC,Z,-7.76e-3,-8.86e-3   
+
+ 
+/OUTPUT,TC03,txt,,
+PRNSOL,TEMP 
+/OUTPUT
+
+
+! Thermocouple near Bottom surface: TC04 in the data-summary-HIVE-00002
+
+NSEL,S,LOC,X,monoBSquareL
+NSEL,R,LOC,Y,-9.36e-3,-8.1e-3
+NSEL,R,LOC,Z,-7.03e-3,-8.29e-3   
+!PRNSOL,TEMP
+  
+/OUTPUT,TC04,txt,,
+PRNSOL,TEMP
+/OUTPUT
+
+
+
+FINISH
